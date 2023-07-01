@@ -1,102 +1,135 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using SearchOption = System.IO.SearchOption;
 
 namespace FilenameInserter;
 
 internal class FileTraverser
 {
-    private readonly IEnumerable<string> _filePaths;
-    private readonly string _separator;
-    private readonly bool _isAppend;
-
-    public FileTraverser(
-        string dirPath,
-        string separator,
-        bool isAppend,
-        bool recursive,
-        string fileExtensions)
+    public enum Mode
     {
-        SearchOption searchOption = recursive
-            ? SearchOption.AllDirectories
-            : SearchOption.TopDirectoryOnly;
+        Append,
+        Prepend,
+    }
 
-        _filePaths = GetFilePaths(
-            dirPath, fileExtensions, searchOption);
+    private readonly Mode _mode;
+    private readonly DirectoryInfo _directoryInfo;
+    private readonly List<string> _fileExtensions;
+    private readonly SearchOption _searchOption;
+    private readonly string _delimiter;
+    private readonly bool _silent;
 
-        _separator = separator;
-        _isAppend = isAppend;
+    public FileTraverser(Mode mode, FileTraverserOptions options)
+    {
+        _mode = mode;
+
+        _searchOption = !options.Recursive
+            ? SearchOption.TopDirectoryOnly
+            : SearchOption.AllDirectories;
+
+        _directoryInfo = options.DirectoryInfo;
+        _fileExtensions = options.FileExtensions;
+        _delimiter = options.Delimiter;
+        _silent = options.Silent;
     }
 
     public void Process()
     {
-        foreach (string path in _filePaths)
+        if (!_silent)
         {
-            string addition = GetFileName(path);
+            ShowConfirmation();
+        }
+
+        LineModifier lineModifier = _mode switch
+        {
+            Mode.Append => ModifyLineAppend,
+            Mode.Prepend => ModifyLinePrepend,
+            _ => ModifyLineAppend,
+        };
+
+        IEnumerable<string> filePaths = GetFilePaths(
+            _fileExtensions,
+            _directoryInfo.FullName,
+            _searchOption);
+
+        ModifyAll(filePaths, lineModifier);
+    }
+
+    private void ShowConfirmation()
+    {
+        StringBuilder fileExtensions = new();
+        fileExtensions.Append('[');
+
+        for (int i = 0; i < _fileExtensions.Count - 1; i++)
+        {
+            fileExtensions.Append(_fileExtensions[i]);
+            fileExtensions.Append(", ");
+        }
+
+        fileExtensions.Append(_fileExtensions[^1]);
+        fileExtensions.Append(']');
+
+        Console.WriteLine($"Files {fileExtensions} in folder '{_directoryInfo.FullName}' will be modified. Press enter to continue...");
+        Console.ReadLine();
+        Console.Clear();
+    }
+
+    private static IEnumerable<string> GetFilePaths(
+        List<string> fileExtensions,
+        string folderPath,
+        SearchOption searchOption)
+    {
+        IEnumerable<string>? filePaths = default;
+
+        foreach (string fileExtension in fileExtensions)
+        {
+            IEnumerable<string> currentEnumeration = Directory
+                .EnumerateFiles(
+                    folderPath,
+                    $"*.{fileExtension}",
+                    searchOption);
+
+            filePaths = filePaths != null
+                ? filePaths.Concat(currentEnumeration)
+                : currentEnumeration;
+        }
+
+        return filePaths!;
+    }
+
+    private static void ModifyAll(
+        IEnumerable<string> filePaths, LineModifier lineModifier)
+    {
+        foreach (string path in filePaths)
+        {
+            string fileName = Path.GetFileNameWithoutExtension(path);
 
             string[] lines = File.ReadAllLines(path);
 
             for (int i = 0; i < lines.Length; i++)
             {
-                lines[i] = ModifyLine(lines[i], addition);
+                lines[i] = lineModifier(lines[i], fileName);
             }
 
             File.WriteAllLines(path, lines);
         }
     }
 
-    private static IEnumerable<string> GetFilePaths(
-        string dirPath,
-        string fileExtensions,
-        SearchOption searchOption)
+    private delegate string LineModifier(
+        string line, string addition);
+
+    private string ModifyLineAppend(
+        string line, string addition)
     {
-        char separator = '|';
-
-        IEnumerable<string>? filePaths = default;
-
-        if (fileExtensions.Contains(separator))
-        {
-            string[] patterns = fileExtensions.Split(separator);
-
-            foreach (string pattern in patterns)
-            {
-                IEnumerable<string> current = Directory
-                    .EnumerateFiles(
-                        dirPath, pattern, searchOption);
-
-                filePaths = filePaths != null
-                    ? filePaths.Concat(current)
-                    : current;
-            }
-        }
-        else
-        {
-            filePaths = Directory.EnumerateFiles(
-                dirPath, fileExtensions, searchOption);
-        }
-
-        return filePaths!;
+        return $"{line}{_delimiter}{addition}";
     }
 
-    private static string GetFileName(string path)
+    private string ModifyLinePrepend(
+        string line, string addition)
     {
-        string fileName = Path.GetFileName(path);
-
-        int lastDotIndex = fileName.LastIndexOf('.');
-
-        if (lastDotIndex != -1)
-        {
-            fileName = fileName[..lastDotIndex] + "_" + fileName[(lastDotIndex + 1)..];
-        }
-
-        return fileName;
-    }
-
-    private string ModifyLine(string line, string addition)
-    {
-        return _isAppend
-            ? $"{line}{_separator}{addition}"
-            : $"{addition}{_separator}{line}";
+        return $"{addition}{_delimiter}{line}";
     }
 }
