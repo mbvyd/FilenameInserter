@@ -19,6 +19,7 @@ internal class Program
 
         _container.Register<FilenameInserter>();
         _container.Register<FileProcessor>();
+        _container.Register<TextProcessor>();
 
         _container.Verify();
     }
@@ -52,8 +53,8 @@ internal class Program
 
         AddOptionsToCommands();
 
-        SetHandler(appendCommand, FilenameInserter.Mode.Append);
-        SetHandler(prependCommand, FilenameInserter.Mode.Prepend);
+        SetHandler(appendCommand, Mode.Append);
+        SetHandler(prependCommand, Mode.Prepend);
 
         var rootCommand = new RootCommand
         {
@@ -98,8 +99,7 @@ internal class Program
             prependCommand.AddOption(fileExtensionsOption);
         }
 
-        void SetHandler(
-            Command command, FilenameInserter.Mode mode)
+        void SetHandler(Command command, Mode mode)
         {
             command.SetHandler(
                 (folder,
@@ -108,7 +108,7 @@ internal class Program
                 recursive,
                 fileExtensions) =>
                 {
-                    var options = new FileInserterOptions
+                    var options = new Options
                     {
                         DirectoryInfo = folder,
                         Recursive = recursive,

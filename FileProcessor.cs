@@ -24,7 +24,7 @@ internal class FileProcessor
         tempFile.MoveTo(originalPath, overwrite: true);
     }
 
-    public void Init(FileInserterOptions options)
+    public void Init(Options options)
     {
         _searchOption = !options.Recursive
             ? SearchOption.TopDirectoryOnly

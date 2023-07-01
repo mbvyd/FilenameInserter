@@ -6,35 +6,27 @@ namespace FilenameInserter;
 
 internal class FilenameInserter
 {
-    public enum Mode
-    {
-        Append,
-        Prepend,
-    }
-
     private readonly FileProcessor _fileProcessor;
+    private readonly TextProcessor _textProcessor;
 
-    private string? _delimiter;
     private bool _silent;
-
-    private Mode _mode;
-
     private bool _inited;
 
-    public FilenameInserter(FileProcessor fileProcessor)
+    public FilenameInserter(
+        FileProcessor fileProcessor, TextProcessor textProcessor)
     {
         _fileProcessor = fileProcessor;
+        _textProcessor = textProcessor;
     }
 
-    public void Init(Mode mode, FileInserterOptions options)
+    public void Init(Mode mode, Options options)
     {
-        _mode = mode;
-
-        _delimiter = options.Delimiter;
         _silent = options.Silent;
 
         _fileProcessor.Init(options);
         _fileProcessor.Validate();
+
+        _textProcessor.Init(mode, options);
 
         _inited = true;
     }
@@ -50,29 +42,21 @@ internal class FilenameInserter
 
         _fileProcessor.CreateTempFolder();
 
-        LineModifier lineModifier = _mode switch
-        {
-            Mode.Append => ModifyLineAppend,
-            Mode.Prepend => ModifyLinePrepend,
-            _ => ModifyLineAppend,
-        };
-
-        IEnumerable<string> filePaths = _fileProcessor.GetFilePaths();
-
-        ModifyFiles(filePaths, lineModifier);
+        ModifyFiles();
 
         _fileProcessor.Cleanup();
     }
 
-    private void ModifyFiles(
-        IEnumerable<string> filePaths, LineModifier lineModifier)
+    private void ModifyFiles()
     {
+        IEnumerable<string> filePaths = _fileProcessor.GetFilePaths();
+
         foreach (string path in filePaths)
         {
             string fileName = Path.GetFileNameWithoutExtension(path);
 
-            IEnumerable<string> lines = UpdateLines(
-                File.ReadLines(path), lineModifier, fileName);
+            IEnumerable<string> lines = _textProcessor.UpdateLines(
+                File.ReadLines(path), fileName);
 
             // нельзя записывать в состояние объекта - чтобы использовать
             // неограниченное число временных файлов при многопотоке
@@ -82,28 +66,5 @@ internal class FilenameInserter
 
             FileProcessor.OverwriteOriginal(tempFile, path);
         }
-    }
-
-    private static IEnumerable<string> UpdateLines(
-        IEnumerable<string> lines,
-        LineModifier lineModifier,
-        string fileName)
-    {
-        foreach (string line in lines)
-        {
-            yield return lineModifier(line, fileName);
-        }
-    }
-
-    private delegate string LineModifier(string line, string addition);
-
-    private string ModifyLineAppend(string line, string addition)
-    {
-        return $"{line}{_delimiter}{addition}";
-    }
-
-    private string ModifyLinePrepend(string line, string addition)
-    {
-        return $"{addition}{_delimiter}{line}";
     }
 }
