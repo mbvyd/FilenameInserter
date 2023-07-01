@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -9,7 +10,7 @@ namespace FilenameInserter;
 
 internal class FileProcessor
 {
-    private readonly List<string> _tempFileNames = new();
+    private ConcurrentBag<string> _tempFileNames = new();
     private DirectoryInfo? _tempFolder;
 
     private DirectoryInfo? _folder;
@@ -130,7 +131,7 @@ internal class FileProcessor
             }
         }
 
-        _tempFileNames.Remove(tempFile.Name);
+        _tempFileNames = _tempFileNames.Remove(tempFile.Name);
 
         tempFile.MoveTo(sourceFilePath, overwrite: true);
     }
