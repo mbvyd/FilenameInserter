@@ -18,12 +18,6 @@ internal class FileProcessor
 
     private bool _inited = false;
 
-    public static void OverwriteOriginal(
-        FileInfo tempFile, string originalPath)
-    {
-        tempFile.MoveTo(originalPath, overwrite: true);
-    }
-
     public void Init(Options options)
     {
         _searchOption = !options.Recursive
@@ -105,55 +99,40 @@ internal class FileProcessor
         return filePaths!;
     }
 
-    public FileInfo GetTempFile()
+    public void ModifyFile(
+        string sourceFilePath, TextProcessor textProcessor)
     {
         _inited.Throw().IfFalse();
+        textProcessor.Inited.Throw().IfFalse();
 
-        string fileName;
+        IEnumerable<string> lines = File.ReadLines(sourceFilePath);
 
-        do
-        {
-            fileName = GetUniquePathOrName(_tempFolder!, path: false);
-        }
-        while (_tempFileNames.Contains(fileName));
+        FileInfo tempFile = GetTempFile();
 
-        // запись в словарь гораздо быстрее создания файла, а при
-        // многопотоке теоретически возможна ситуация, когда нескольким
-        // потокам отдаётся одинаковое имя файла - тогда последний поток
-        // перезапишет данные предыдущих потоков, работавших с файлом;
-        // либо будет исключение, т.к. предыдущий поток ещё не освободил файл
-        _tempFileNames.Add(fileName);
-
-        return new(Path.Combine(_tempFolder!.FullName, fileName));
-    }
-
-    public void WriteTempFile(
-        FileInfo file, IEnumerable<string> lines)
-    {
-        _inited.Throw().IfFalse();
-
-        using var writer = new StreamWriter(
-            Path.Combine(_tempFolder!.FullName, file.Name),
+        using (var writer = new StreamWriter(
+            Path.Combine(_tempFolder!.FullName, tempFile.Name),
             append: false,
-            Encoding.UTF8);
-
-        foreach (string line in lines)
+            Encoding.UTF8))
         {
-            try
+            foreach (string line in lines)
             {
-                writer.WriteLine(line);
-            }
-            catch (IOException ex)
-            {
-                writer.Dispose();
-                Cleanup();
-
-                Console.WriteLine(ex.Message);
-                throw;
+                try
+                {
+                    textProcessor.ModifyWriteLine(
+                        line: line, filePath: sourceFilePath, writer);
+                }
+                catch (Exception)
+                {
+                    writer.Dispose();
+                    Cleanup();
+                    throw;
+                }
             }
         }
 
-        _tempFileNames.Remove(file.Name);
+        _tempFileNames.Remove(tempFile.Name);
+
+        tempFile.MoveTo(sourceFilePath, overwrite: true);
     }
 
     public void Cleanup()
@@ -210,5 +189,25 @@ internal class FileProcessor
         while (File.Exists(uniquePath) || Directory.Exists(uniquePath));
 
         return path ? uniquePath : uniqueName;
+    }
+
+    private FileInfo GetTempFile()
+    {
+        string fileName;
+
+        do
+        {
+            fileName = GetUniquePathOrName(_tempFolder!, path: false);
+        }
+        while (_tempFileNames.Contains(fileName));
+
+        // запись в словарь гораздо быстрее создания файла, а при
+        // многопотоке теоретически возможна ситуация, когда нескольким
+        // потокам отдаётся одинаковое имя файла - тогда последний поток
+        // перезапишет данные предыдущих потоков, работавших с файлом;
+        // либо будет исключение, т.к. предыдущий поток ещё не освободил файл
+        _tempFileNames.Add(fileName);
+
+        return new(Path.Combine(_tempFolder!.FullName, fileName));
     }
 }
