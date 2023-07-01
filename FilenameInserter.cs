@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Threading.Tasks;
 using Throw;
 
 namespace FilenameInserter;
@@ -43,10 +44,8 @@ internal class FilenameInserter
 
         IEnumerable<string> filePaths = _fileProcessor.GetFilePaths();
 
-        foreach (string path in filePaths)
-        {
-            _fileProcessor.ModifyFile(path, _textProcessor);
-        }
+        Parallel.ForEach(filePaths, path =>
+            _fileProcessor.ModifyFile(path, _textProcessor));
 
         _fileProcessor.Cleanup();
     }
