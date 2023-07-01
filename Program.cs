@@ -1,11 +1,28 @@
 ﻿using System.Collections.Generic;
 using System.CommandLine;
 using System.IO;
+using SimpleInjector;
+using SimpleInjector.Lifestyles;
 
 namespace FilenameInserter;
 
 internal class Program
 {
+    private static readonly Container _container;
+
+    static Program()
+    {
+        _container = new();
+
+        _container.Options.DefaultScopedLifestyle =
+            new AsyncScopedLifestyle();
+
+        _container.Register<FilenameInserter>();
+        _container.Register<FileProcessor>();
+
+        _container.Verify();
+    }
+
     private static void Main(string[] args)
     {
         Option<DirectoryInfo> folderOption = new("--folder");
@@ -35,8 +52,8 @@ internal class Program
 
         AddOptionsToCommands();
 
-        SetHandler(appendCommand, FileTraverser.Mode.Append);
-        SetHandler(prependCommand, FileTraverser.Mode.Prepend);
+        SetHandler(appendCommand, FilenameInserter.Mode.Append);
+        SetHandler(prependCommand, FilenameInserter.Mode.Prepend);
 
         var rootCommand = new RootCommand
         {
@@ -82,7 +99,7 @@ internal class Program
         }
 
         void SetHandler(
-            Command command, FileTraverser.Mode mode)
+            Command command, FilenameInserter.Mode mode)
         {
             command.SetHandler(
                 (folder,
@@ -91,16 +108,19 @@ internal class Program
                 recursive,
                 fileExtensions) =>
                 {
-                    var options = new FileTraverserOptions
+                    var options = new FileInserterOptions
                     {
                         DirectoryInfo = folder,
-                        Delimiter = delimiter,
-                        Silent = silent,
                         Recursive = recursive,
                         FileExtensions = fileExtensions,
+                        Silent = silent,
+                        Delimiter = delimiter,
                     };
-                    options.Validate();
-                    var engine = new FileTraverser(mode, options);
+
+                    FilenameInserter engine = _container
+                        .GetInstance<FilenameInserter>();
+
+                    engine.Init(mode, options);
                     engine.Process();
                 },
                 folderOption,
