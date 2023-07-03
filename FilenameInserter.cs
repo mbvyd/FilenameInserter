@@ -47,6 +47,6 @@ internal class FilenameInserter
         Parallel.ForEach(filePaths, path =>
             _fileProcessor.ModifyFile(path, _textProcessor));
 
-        _fileProcessor.Cleanup();
+        _fileProcessor.DeleteTempFolder();
     }
 }

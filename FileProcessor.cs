@@ -125,7 +125,7 @@ internal class FileProcessor
                 catch (Exception)
                 {
                     writer.Dispose();
-                    Cleanup();
+                    DeleteTempFolder();
                     throw;
                 }
             }
@@ -136,9 +136,12 @@ internal class FileProcessor
         tempFile.MoveTo(sourceFilePath, overwrite: true);
     }
 
-    public void Cleanup()
+    public void DeleteTempFolder()
     {
-        _inited.Throw().IfFalse();
+        if (!_inited)
+        {
+            return;
+        }
 
         _tempFolder!.Delete(recursive: true);
     }
@@ -202,11 +205,11 @@ internal class FileProcessor
         }
         while (_tempFileNames.Contains(fileName));
 
-        // запись в словарь гораздо быстрее создания файла, а при
-        // многопотоке теоретически возможна ситуация, когда нескольким
-        // потокам отдаётся одинаковое имя файла - тогда последний поток
-        // перезапишет данные предыдущих потоков, работавших с файлом;
-        // либо будет исключение, т.к. предыдущий поток ещё не освободил файл
+        // writing to the bag is much faster than creating a file, and it
+        // is theoretically possible for multiple threads to get the same
+        // file name - in this case the last thread will overwrite the
+        // data of the previous thread that worked with the file; or an
+        // exception will be thrown because the previous thread hasn't yet released the file
         _tempFileNames.Add(fileName);
 
         return new(Path.Combine(_tempFolder!.FullName, fileName));

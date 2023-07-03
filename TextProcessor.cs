@@ -37,6 +37,8 @@ internal class TextProcessor
         Inited = true;
     }
 
+    // writer is passed because Span<T> should be written in same scope
+    // it is declared - to avoid unsafe code
     public void ModifyWriteLine(
         string line, string filePath, StreamWriter writer)
     {
